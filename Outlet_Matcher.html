@@ -409,9 +409,9 @@ function scorePair(a,b){
   if(dist!==null&&dist<=100) method.push("CloseLocation");
   return {a,b,nameSim,ownerSim,phoneMatch,dist,score:Math.round(score),method:method.join("+")||"Weak"};
 }
-function rowFor(a,b,status,s,note){
+function rowFor(a,b,status,s,note,duplicateOfId){
   return {
-    Existing_ID:a?a.id:"", New_Survey_ID:b?b.id:"",
+    Existing_ID:a?a.id:"", New_Survey_ID:b?b.id:"", Possible_Duplicate_With_ID:duplicateOfId||"",
     Existing_Outlet:a?a.outlet:"", Survey_Outlet:b?b.outlet:"",
     Existing_Owner:a?a.owner:"", Survey_Owner:b?b.owner:"",
     Existing_Phone:a?a.phone1Raw:"", Existing_Phone_2:a?a.phone2Raw:"",
@@ -439,7 +439,7 @@ function renderPreview(){
   document.getElementById("preview").innerHTML="<tr>"+heads.map(h=>"<th>"+h+"</th>").join("")+"</tr>"+
     list.slice(0,200).map(r=>"<tr>"+heads.map(h=>{
       if(h==="Match_Status") return '<td><span class="pill '+(r[h]==="AUTO_MATCH"?"auto":(r[h]==="REVIEW"||r[h]==="POSSIBLE_DUPLICATE")?"review":"unmatched")+'">'+r[h]+"</span></td>";
-      if(h==="Existing_ID"||h==="New_Survey_ID") return "<td><strong>"+(r[h]??"")+"</strong></td>";
+      if(h==="Existing_ID"||h==="New_Survey_ID"||h==="Possible_Duplicate_With_ID") return "<td><strong>"+(r[h]??"")+"</strong></td>";
       return "<td>"+(r[h]??"")+"</td>";
     }).join("")+"</tr>").join("");
 }
@@ -498,10 +498,19 @@ function runMatching(){
   resultRows=[]; const usedA=new Set(); let nAuto=0,nReview=0,nDuplicate=0,nUnmatchedB=0;
   B.forEach((b,i)=>{
     const s=bestPerB[i];
-    let status="UNMATCHED", note="";
+    let status="UNMATCHED", note="", duplicateOfId="";
     if(s){
       const contested=claim.get(s.a._idx).bIdx!==i;
-      if(contested){ status="POSSIBLE_DUPLICATE"; note="Possible duplicate: another surveyed outlet scored higher for this existing outlet. Compare the two surveyed records — keep one, treat the other as a duplicate survey or as a new outlet."; }
+      if(contested){
+        const winnerB=B[claim.get(s.a._idx).bIdx];
+        const winnerScore=claim.get(s.a._idx).score;
+        duplicateOfId=winnerB.id;
+        status="POSSIBLE_DUPLICATE";
+        note="Possible Duplicate with ID: "+winnerB.id+". This surveyed outlet ("+b.id+") and surveyed outlet "+winnerB.id
+          +" both matched the same Existing ID "+s.a.id+". Surveyed ID "+winnerB.id+" was kept as the match because it scored higher ("
+          +winnerScore+" vs "+s.score+"). Compare the two surveyed records: keep only one as the match for Existing ID "+s.a.id
+          +"; treat the other as a duplicate survey or as a new outlet.";
+      }
       else if(s.phoneMatch){ status="AUTO_MATCH"; note="Phone numbers are the same."; }
       else if((s.nameSim||0)>=90 && s.dist!==null && s.dist<=100){ status="AUTO_MATCH"; note="Outlet names are almost identical and the locations are close (within 100 m), even though owner/phone differ."; }
       else if((s.ownerSim||0)>=90 && (s.nameSim||0)>=50 && s.dist!==null && s.dist<=100){ status="AUTO_MATCH"; note="Owner names are almost identical, the locations are close (within 100 m), and the outlet names partly match, even though the phone differs."; }
@@ -517,7 +526,7 @@ function runMatching(){
     else if(status==="REVIEW"){ nReview++; usedA.add(s.a._idx); }
     else if(status==="POSSIBLE_DUPLICATE"){ nDuplicate++; usedA.add(s.a._idx); }
     else nUnmatchedB++;
-    resultRows.push(rowFor(s?s.a:null,b,status,s,note));
+    resultRows.push(rowFor(s?s.a:null,b,status,s,note,duplicateOfId));
   });
   let nUnmatchedA=0;
   A.forEach(a=>{ if(!usedA.has(a._idx)){ nUnmatchedA++; resultRows.push(rowFor(a,null,"UNMATCHED",null,"Existing outlet not matched to any surveyed outlet.")); } });
@@ -553,7 +562,7 @@ document.getElementById("dlXlsx").addEventListener("click",()=>{
 // ---------- Excel (.xlsx) writer — native, no library, runs locally ----------
 // Column layout for the evidence sheets. IDs first for XLOOKUP, IDs/phones forced to text.
 const XLSX_COLS=[
-  ["Existing_ID",18,"text"],["New_Survey_ID",18,"text"],["Match_Status",15,"status"],["Match_Method",24,"text"],
+  ["Existing_ID",18,"text"],["New_Survey_ID",18,"text"],["Possible_Duplicate_With_ID",20,"text"],["Match_Status",15,"status"],["Match_Method",24,"text"],
   ["Score",9,"num"],["Existing_Outlet",26,"text"],["Survey_Outlet",26,"text"],["Name_Similarity",14,"num"],
   ["Existing_Owner",22,"text"],["Survey_Owner",22,"text"],["Owner_Similarity",14,"num"],
   ["Existing_Phone",18,"text"],["Existing_Phone_2",18,"text"],["Survey_Phone",18,"text"],["Survey_Phone_2",18,"text"],
@@ -602,7 +611,7 @@ function buildWorkbookSheets(){
     crow("Possible duplicates","","In the Possible_Duplicates sheet, compare each row with the winning match for the same Existing_ID (find it in Matched). If the duplicate is truly the same outlet surveyed twice, REJECT it. If it is a separate shop, REJECT the pairing and treat it as a new outlet. Only APPROVE one if the current winner is wrong — then reject the winner instead.",S.label,S.plain,S.text,44),
     crow("Step 1","","In the Review sheet, filter Review_Decision = APPROVE. Those pairs are confirmed matches.",S.label,S.plain,S.text),
     crow("Step 2","","Copy columns A:B of the approved rows and paste them at the bottom of the Crosswalk sheet. Your XLOOKUPs now cover approved reviews too.",S.label,S.plain,S.text,32),
-    crow("Shortcut (Google Sheets)","","=FILTER(Review!A:B, Review!S:S=\"APPROVE\") lists the approved pairs on any sheet (column S is Review_Decision).",S.label,S.plain,S.text,32)
+    crow("Shortcut (Google Sheets)","","=FILTER(Review!A:B, Review!T:T=\"APPROVE\") lists the approved pairs on any sheet (column T is Review_Decision).",S.label,S.plain,S.text,32)
   ]};
   const crosswalk={ name:"Crosswalk", tab:"0B6E4F", freeze:true, filter:true,
     headers:["Existing_ID","New_Survey_ID"], widths:[22,22], kinds:["text","text"],
@@ -678,7 +687,7 @@ function sheetXml(spec, shared){
         const kind=spec.kinds?spec.kinds[c]:"text", head=spec.headers[c];
         let style=3;
         if(head==="Match_Status") style=(v==="AUTO_MATCH"?5:((v==="REVIEW"||v==="POSSIBLE_DUPLICATE")?6:7));
-        else if(head==="Existing_ID"||head==="New_Survey_ID") style=2;
+        else if(head==="Existing_ID"||head==="New_Survey_ID"||head==="Possible_Duplicate_With_ID") style=2;
         else if(kind==="num" && v!=="" && isFinite(Number(v))) { return cell(Number(v),c+1,r,4); }
         return cell(v,c+1,r,style);
       }).join("")+'</row>';
@@ -757,5 +766,5 @@ function makeXlsxBlob(sheets){
   return zipStore(files);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b61e5e8ce5164d',t:'MTc5NDgyODE1NA=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b61e5e8ce5164d',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b62ffc1c33dbf9',t:'MTc5NDgyODg3Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b62ffc1c33dbf9',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
