@@ -165,7 +165,8 @@
       <ul>
         <li><strong>Phone (cleaned):</strong> <code>0803…</code>, <code>+234 803…</code> and <code>234803…</code> are treated as the same number. If a sheet has two phone columns (e.g. existing: outlet phone + contact phone; surveyed: contact phone + owner's phone), map both — <strong>every number on both sides is checked against every other number</strong>, and any exact match counts. The second phone column is optional; sheets with one phone column work as before. A pair with an <strong>exact same phone number is marked AUTO_MATCH</strong>. The one exception: if two surveyed outlets claim the same existing outlet, only the stronger claim auto-matches — the other goes to Possible Duplicates. A near-identical outlet name is likewise always kept for REVIEW at minimum.</li>
         <li><strong>Names (fuzzy):</strong> spelling differences, word order, and filler words like Shop / Store / Ltd are ignored, so “Adebayo Stores” can match “Store Adebayo”. Titles (Alhaji, Mallam, Engr, Dr…) are ignored in owner names.</li>
-        <li><strong>Name + location shortcuts:</strong> an almost-identical <em>outlet</em> name (≥ 90) within 100 m auto-matches even if owner/phone differ — and so does an almost-identical <em>owner</em> name (≥ 90) within 100 m when the outlet names also partly match (≥ 50). Recorded owners often differ between visits (owner vs attendant/contact), so they must not veto a strong name + location match.</li>
+        <li><strong>Name + location shortcuts:</strong> an almost-identical <em>outlet</em> name (≥ 90) within 100 m auto-matches even if owner/phone differ — and so does an almost-identical <em>owner</em> name (≥ 90) within 100 m when the outlet names also partly match (≥ 50). Outlet <em>and</em> owner names both ≥ 85 within the auto-match distance also auto-match. Recorded owners often differ between visits (owner vs attendant/contact), so they must not veto a strong name + location match.</li>
+        <li><strong>Namesakes farther away:</strong> pairs that share a distinctive outlet/owner word are compared at any distance. A very similar outlet + owner name that is too far to auto-match goes to REVIEW (possible relocation or namesake) — never straight to Unmatched.</li>
         <li><strong>Distance:</strong> for pairs <em>without</em> a matching phone, candidates must normally be near each other. An exact phone match auto-matches regardless of distance — so spot-check phone-based auto-matches, because one owner/agent phone can serve several outlets.</li>
         <li><strong>One-to-one:</strong> if two surveyed outlets claim the same existing outlet, the higher score wins and the other is flagged as a possible duplicate survey.</li>
         <li><strong>Score:</strong> a weighted blend of outlet-name similarity, owner-name similarity, phone match and closeness (0–100).</li>
@@ -302,7 +303,7 @@ function buildMapping(el, headers, prefix){
   const guesses={
     id:guess(headers,["id","code","ref"]),
     outlet:guess(headers,["outlet","business","shop name","store name","name"]),
-    owner:guess(headers,["owner","proprietor","contact person","manager","person"]),
+    owner:guess(headers,["owner","proprietor","contact name","contact person","manager","person"]),
     phone:phoneGuesses[0],
     phone2:phoneGuesses[1],
     lat:guess(headers,["latitude","lat"]),
@@ -469,6 +470,16 @@ function runMatching(){
   const cellOf=(lat,lon)=>Math.floor(lat/0.01)+":"+Math.floor(lon/0.01);
   A.forEach(a=>{ if(a.lat!==null&&a.lon!==null){ const k=cellOf(a.lat,a.lon); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(a); } });
 
+  // Name/owner candidates at ANY distance: a surveyed outlet whose outlet+owner names
+  // share a distinctive word with an existing outlet (e.g. "Adamu" in Mohammed/Muhammed
+  // Adamu) must at least be compared — otherwise a different phone plus a point a little
+  // over 1 km away makes a near-identical namesake vanish straight into Unmatched.
+  const GENERIC_NAME_TOKENS=new Set(["block","industry","industries","cement","company","depot","global","national","international","trade","centre","center","plaza"]);
+  const distinctiveTokens=r=>[...new Set(normText((r.outlet||"")+" "+(r.owner||"")).split(" ")
+    .filter(t=>t.length>=3&&!GENERIC_NAME_TOKENS.has(t)))];
+  const nameIndex=new Map();
+  A.forEach(a=>distinctiveTokens(a).forEach(t=>{ if(!nameIndex.has(t)) nameIndex.set(t,[]); nameIndex.get(t).push(a); }));
+
   const bestPerB=B.map(b=>{
     const cand=new Map();
     b.phones.forEach(p=>(phoneIndex.get(p)||[]).forEach(a=>cand.set(a._idx,a)));
@@ -483,9 +494,19 @@ function runMatching(){
       if(!best||s.score>best.score) best=s;
       if(s.phoneMatch && (!bestPhone||s.score>bestPhone.score)) bestPhone=s;
     });
+    // compare strong name/owner lookalikes even when they are far away
+    let bestName=null;
+    const nameCand=new Set();
+    distinctiveTokens(b).forEach(t=>(nameIndex.get(t)||[]).forEach(a=>{ if(!cand.has(a._idx)) nameCand.add(a); }));
+    nameCand.forEach(a=>{ const s=scorePair(a,b);
+      if(((s.nameSim||0)>=85||(s.ownerSim||0)>=85||((s.nameSim||0)>=75&&(s.ownerSim||0)>=75))
+        && (!bestName||s.score>bestName.score)) bestName=s;
+    });
     // An exact phone match is an identity match: it wins over a merely nearby/named
     // candidate, so the pair below can be classified on the phone rule.
-    return bestPhone||best;
+    if(bestPhone) return bestPhone;
+    if(bestName && (!best||bestName.score>best.score)) return bestName;
+    return best||bestName;
   });
 
   // one-to-one: the highest score wins a contested existing outlet
@@ -514,13 +535,16 @@ function runMatching(){
       else if(s.phoneMatch){ status="AUTO_MATCH"; note="Phone numbers are the same."; }
       else if((s.nameSim||0)>=90 && s.dist!==null && s.dist<=100){ status="AUTO_MATCH"; note="Outlet names are almost identical and the locations are close (within 100 m), even though owner/phone differ."; }
       else if((s.ownerSim||0)>=90 && (s.nameSim||0)>=50 && s.dist!==null && s.dist<=100){ status="AUTO_MATCH"; note="Owner names are almost identical, the locations are close (within 100 m), and the outlet names partly match, even though the phone differs."; }
+      else if((s.nameSim||0)>=85 && (s.ownerSim||0)>=85 && s.dist!==null && s.dist<=autoDist){ status="AUTO_MATCH"; note="Outlet and owner names are both almost identical and the locations are close, even though the phone number differs."; }
       else if(s.score>=autoScore && (s.dist===null||s.dist<=autoDist)){ status="AUTO_MATCH"; }
       else if(s.score>=reviewScore && (s.dist===null||s.dist<=1000)){ status="REVIEW"; note="Check this pair on the map."; }
       else if(s.dist!==null&&s.dist<=50&&(s.nameSim||0)>=60){ status="REVIEW"; note="Very close location but names differ — check on map."; }
-      // Safety net: a near-identical outlet name is strong evidence on its own.
-      // Never throw such a pair away as UNMATCHED just because the blended score
-      // fell below the Review threshold — a human must see it.
-      if(status==="UNMATCHED" && (s.nameSim||0)>=90){ status="REVIEW"; note="Outlet names match strongly but phone/owner/distance do not agree — check this pair."; }
+      // Safety net: near-identical outlet+owner names are strong evidence on their own.
+      // Never throw such a pair away as UNMATCHED just because the blended score fell
+      // below the Review threshold or the points are farther apart — it may be a
+      // relocated outlet (or a namesake, which is exactly why a human must see it).
+      if(status==="UNMATCHED" && (s.nameSim||0)>=85 && (s.ownerSim||0)>=70){ status="REVIEW"; note="Outlet and owner names are very similar but the locations are farther apart (or coordinates are missing) — possible relocated outlet or another outlet with a similar name/owner. Check this pair."; }
+      else if(status==="UNMATCHED" && (s.nameSim||0)>=90){ status="REVIEW"; note="Outlet names match strongly but phone/owner/distance do not agree — check this pair."; }
     }
     if(status==="AUTO_MATCH"){ nAuto++; usedA.add(s.a._idx); }
     else if(status==="REVIEW"){ nReview++; usedA.add(s.a._idx); }
@@ -766,5 +790,5 @@ function makeXlsxBlob(sheets){
   return zipStore(files);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b62ffc1c33dbf9',t:'MTc5NDgyODg3Ng=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b62ffc1c33dbf9',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b6699779cfb75b',t:'MTc5NDgzMTIzNQ=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b6699779cfb75b',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
