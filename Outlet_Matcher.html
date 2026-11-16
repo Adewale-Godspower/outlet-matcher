@@ -168,6 +168,7 @@
         <li><strong>Name + location shortcuts:</strong> an almost-identical <em>outlet</em> name (≥ 90) within 100 m auto-matches even if owner/phone differ — and so does an almost-identical <em>owner</em> name (≥ 90) within 100 m when the outlet names also partly match (≥ 50). Outlet <em>and</em> owner names both ≥ 85 within the auto-match distance also auto-match. Recorded owners often differ between visits (owner vs attendant/contact), so they must not veto a strong name + location match.</li>
         <li><strong>Exact outlet + owner name:</strong> if both are almost identical (outlet ≥ 95, owner ≥ 90), the pair auto-matches <em>regardless of distance</em> — recorded coordinates are sometimes wrong or stale, and the note will flag any distance over 1 km so you can check those two records' coordinates.</li>
         <li><strong>Namesakes farther away:</strong> pairs that share a distinctive outlet/owner word are compared at any distance. A very similar outlet + owner name that is too far to auto-match goes to REVIEW (possible relocation or namesake) — never straight to Unmatched.</li>
+        <li><strong>Review safety net:</strong> a pair is also sent to REVIEW (never auto-matched) when the owner name is almost identical and the outlet names are related at any distance, when the points are within 100 m with a combined score of at least 40, or when outlet names are almost identical at any distance. Subset names, initials and contractions often score low, so a human — not the threshold — should make the final call on those.</li>
         <li><strong>Distance:</strong> for pairs <em>without</em> a matching phone, candidates must normally be near each other. An exact phone match auto-matches regardless of distance — so spot-check phone-based auto-matches, because one owner/agent phone can serve several outlets.</li>
         <li><strong>One-to-one:</strong> if two surveyed outlets claim the same existing outlet, the higher score wins and the other is flagged as a possible duplicate survey.</li>
         <li><strong>Score:</strong> a weighted blend of outlet-name similarity, owner-name similarity, phone match and closeness (0–100).</li>
@@ -543,12 +544,15 @@ function runMatching(){
       else if(s.score>=autoScore && (s.dist===null||s.dist<=autoDist)){ status="AUTO_MATCH"; }
       else if(s.score>=reviewScore && (s.dist===null||s.dist<=1000)){ status="REVIEW"; note="Check this pair on the map."; }
       else if(s.dist!==null&&s.dist<=50&&(s.nameSim||0)>=60){ status="REVIEW"; note="Very close location but names differ — check on map."; }
-      // Safety net: near-identical outlet+owner names are strong evidence on their own.
-      // Never throw such a pair away as UNMATCHED just because the blended score fell
-      // below the Review threshold or the points are farther apart — it may be a
-      // relocated outlet (or a namesake, which is exactly why a human must see it).
-      if(status==="UNMATCHED" && (s.nameSim||0)>=85 && (s.ownerSim||0)>=70){ status="REVIEW"; note="Outlet and owner names are very similar but the locations are farther apart (or coordinates are missing) — possible relocated outlet or another outlet with a similar name/owner. Check this pair."; }
-      else if(status==="UNMATCHED" && (s.nameSim||0)>=90){ status="REVIEW"; note="Outlet names match strongly but phone/owner/distance do not agree — check this pair."; }
+      // Safety net: strong partial evidence must reach a human, not Unmatched.
+      // These send a pair to REVIEW (never AUTO_MATCH) when the blended score or the
+      // recorded distance would otherwise throw it away:
+      //  1. owner almost identical + outlet names clearly related, at any distance
+      //  2. very close location (<=100 m) with a decent combined score
+      //  3. outlet names almost identical, at any distance
+      if(status==="UNMATCHED" && (s.ownerSim||0)>=85 && (s.nameSim||0)>=60){ status="REVIEW"; note="Owner names are almost identical and the outlet names are related, even though the locations are farther apart or the phone differs — check this pair."; }
+      else if(status==="UNMATCHED" && s.dist!==null && s.dist<=100 && s.score>=40){ status="REVIEW"; note="Locations are very close (within 100 m) and there is name/owner similarity, even though the total score is below the Review threshold — check this pair."; }
+      else if(status==="UNMATCHED" && (s.nameSim||0)>=85){ status="REVIEW"; note="Outlet names are almost identical but phone/owner/distance do not agree — possible relocated outlet or another outlet with a similar name/owner. Check this pair."; }
     }
     if(status==="AUTO_MATCH"){ nAuto++; usedA.add(s.a._idx); }
     else if(status==="REVIEW"){ nReview++; usedA.add(s.a._idx); }
@@ -794,5 +798,5 @@ function makeXlsxBlob(sheets){
   return zipStore(files);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b6999b69f62ce2',t:'MTc5NDgzMzIwMg=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b6999b69f62ce2',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5b76217d95c8899',t:'MTc5NDg0MTQxNA=='};var l=window.parent.location,o;try{o=new URL(l.origin).origin}catch(e){try{o=new URL(new URL(l.href).origin).origin}catch(e){o=''}}var u='/cdn-cgi/challenge-platform/scripts/jsd/main.js?ray=a5b76217d95c8899',a=document.createElement('script');a.src=o?new URL(u,o).href:u;document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
