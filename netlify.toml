@@ -1,0 +1,10 @@
+[build]
+  publish = "."
+
+# Serve the tool at the site root ( yoursite.netlify.app/ )
+# even though the file is named Outlet_Matcher.html
+[[redirects]]
+  from = "/"
+  to = "/Outlet_Matcher.html"
+  status = 200
+  force = true

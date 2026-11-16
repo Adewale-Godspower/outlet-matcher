@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────
+# NEVER commit real outlet data or match results to this repo.
+# Data files are blocked by default; only the fake samples pass.
+# ─────────────────────────────────────────────────────────────
+*.csv
+*.xlsx
+*.xls
+*.xlsm
+!samples/*.csv
+
+# Match outputs (generated locally by the tool)
+outlet_match_results.csv
+outlet_match_REVIEW_only.csv
+outlet_crosswalk_auto.csv
+results/
+data/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.tmp
+*~

@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Match existing outlets to newly surveyed outlets by phone, outlet name, owner name and GPS distance. Runs 100% locally in your browser — no data is uploaded.">
+<title>Outlet Matcher</title>
+<style>
+  :root{
+    --green:#0b6e4f; --green-dark:#07503a; --green-soft:#e8f4ee;
+    --amber:#b7791f; --red:#9b2c2c; --ink:#17202a; --muted:#5b6b7a;
+    --line:#d9e1e8; --bg:#eef3f1; --card:#ffffff; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);color:#fff;padding:34px 20px 30px;text-align:center}
+  header h1{margin:0 0 8px;font-size:32px;letter-spacing:.3px}
+  header p{margin:0 auto;max-width:760px;line-height:1.55;opacity:.94}
+  .badges{margin-top:14px}
+  .badge{display:inline-block;border:1px solid rgba(255,255,255,.55);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;margin:2px 3px}
+  main{max-width:1180px;margin:0 auto;padding:22px 16px 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin:0 0 18px;box-shadow:0 2px 10px rgba(16,42,32,.05)}
+  .step-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .step-num{background:var(--green);color:#fff;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+  h2{margin:0;font-size:19px} h3{margin:0 0 8px;font-size:16px}
+  p,li{line-height:1.55} .muted{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--line);border-radius:12px;padding:16px;background:#fcfefd}
+  .dropzone{border:2px dashed #a9c6b8;border-radius:10px;background:#f6faf8;padding:16px;text-align:center;transition:all .15s}
+  .dropzone.dragover{border-color:var(--green);background:var(--green-soft)}
+  label{font-weight:700;font-size:13px;display:block;margin:12px 0 5px}
+  input[type=file],select,input[type=number],input[type=search]{width:100%;padding:9px;border:1px solid #bcc9d4;border-radius:7px;background:#fff;font-size:14px}
+  .stats{margin-top:10px;font-size:12.5px;color:var(--muted);background:#f3f7f5;border:1px solid #e0eae4;border-radius:8px;padding:8px 10px;display:none}
+  button{background:var(--green);color:#fff;border:0;border-radius:8px;padding:11px 18px;font-weight:700;cursor:pointer;font-size:14px}
+  button:hover{background:var(--green-dark)}
+  button.secondary{background:#eef3f5;color:var(--ink);border:1px solid var(--line)}
+  button.secondary:hover{background:#e2eaed}
+  button:disabled{background:#9db8b1;cursor:not-allowed}
+  button.preset{background:#fff;color:var(--green);border:1.5px solid var(--green);padding:7px 14px;font-size:13px}
+  button.preset:hover{background:var(--green-soft)}
+  button.filter{background:#eef3f5;color:var(--ink);border:1px solid var(--line);padding:7px 14px;font-size:13px}
+  button.filter.active{background:var(--green);color:#fff;border-color:var(--green)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+  .settings-grid>div{flex:1 1 230px;max-width:340px}
+  .settings-grid input[type=number]{max-width:none}
+  .stat{display:inline-block;background:#eef6f2;border:1px solid #cfe5da;border-radius:10px;padding:10px 14px;margin:4px 6px 4px 0;min-width:150px}
+  .stat b{font-size:22px;display:block}
+  table{border-collapse:collapse;width:100%;font-size:12px}
+  th,td{border-bottom:1px solid var(--line);padding:7px;text-align:left;vertical-align:top}
+  th{background:#eef3f5;position:sticky;top:0}
+  .wrap{max-height:480px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px;white-space:nowrap}
+  .auto{background:#d3f4e2;color:#07543a}.review{background:#fef3c7;color:#7a4a00}.unmatched{background:#fee2e2;color:#7a1010}
+  code{background:#eef3f5;padding:1px 5px;border-radius:4px}
+  details summary{cursor:pointer;font-weight:700}
+  .advanced-settings{border:1px solid var(--line);border-radius:10px;background:#fcfefd;padding:12px 14px;margin-top:12px}
+  .advanced-settings summary{color:var(--green-dark)}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:14px 16px 30px;line-height:1.6}
+  .foot-brand{display:flex;align-items:center;justify-content:center;gap:9px;color:var(--ink);font-size:14px}
+  .g-logo{background:linear-gradient(135deg,#2f7df6,#1a56db);color:#fff;font-weight:800;font-size:15px;width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(26,86,219,.35)}
+  .foot-brand a{color:var(--ink);font-weight:800;text-decoration:none}
+  .foot-brand a:hover{text-decoration:underline}
+  .foot-sub{margin-top:5px;font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Outlet Matcher</h1>
+  <p>Match existing outlets to newly surveyed outlets by phone number, outlet name, owner name, and GPS distance.</p>
+  <div class="badges">
+    <span class="badge">100% local — no upload</span>
+    <span class="badge">Single file</span>
+    <span class="badge">Works offline</span>
+    <span class="badge">v1.0</span>
+  </div>
+</header>
+
+<main>
+  <!-- STEP 1 -->
+  <section class="card">
+    <div class="step-head">
+      <span class="step-num">1</span>
+      <h2>Load your two CSV files</h2>
+    </div>
+    <p class="muted">Export each spreadsheet as CSV (<em>File → Save As / Download → CSV</em>), then drop the files below or click to choose them. Ideally each file has an ID, outlet name, owner name, phone, latitude and longitude — missing columns are OK.</p>
+    <div class="grid">
+      <div class="panel">
+        <h3>A — Existing outlets</h3>
+        <div class="dropzone" id="dzA">
+          <input type="file" id="fileA" accept=".csv,text/csv" aria-label="Existing outlets CSV">
+          <p class="muted" style="margin:8px 0 0">Drag &amp; drop the existing-outlets CSV here</p>
+        </div>
+        <div id="mapA"></div>
+        <div class="stats" id="countA"></div>
+      </div>
+      <div class="panel">
+        <h3>B — Recently surveyed outlets</h3>
+        <div class="dropzone" id="dzB">
+          <input type="file" id="fileB" accept=".csv,text/csv" aria-label="Recently surveyed outlets CSV">
+          <p class="muted" style="margin:8px 0 0">Drag &amp; drop the surveyed-outlets CSV here</p>
+        </div>
+        <div id="mapB"></div>
+        <div class="stats" id="countB"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="card">
+    <div class="step-head"><span class="step-num">2</span><h2>Settings &amp; run</h2></div>
+    <label>Matching strictness</label>
+    <div class="row">
+      <button class="preset" type="button" data-auto="86" data-review="65" data-dist="200">Conservative</button>
+      <button class="preset" type="button" data-auto="78" data-review="55" data-dist="300">Balanced (recommended)</button>
+      <button class="preset" type="button" data-auto="68" data-review="45" data-dist="500">Lenient</button>
+    </div>
+    <details class="advanced-settings">
+      <summary>Advanced settings — adjust these numbers yourself (optional)</summary>
+      <div class="row settings-grid" style="margin-top:6px">
+        <div><label>Trust automatically if score is at least</label><input type="number" id="autoScore" value="78" min="1" max="100"></div>
+        <div><label>Send to my Review list if score is at least</label><input type="number" id="reviewScore" value="55" min="1" max="100"></div>
+        <div><label>Trust automatically only if distance is not more than (metres)</label><input type="number" id="autoDist" value="300" min="1"></div>
+      </div>
+      <p class="muted">
+        In plain terms — score at/above the first box <em>and</em> within the distance: the tool trusts it.
+        Score at/above the second box but not trusted: you check it. Below that: treated as no match.
+      </p>
+    </details>
+    <div class="row" style="margin-top:12px">
+      <button id="runBtn" disabled>Run Matching</button>
+    </div>
+    <p class="muted">
+      <span class="pill auto">AUTO_MATCH</span> trusted by the tool, spot-check a few &nbsp;
+      <span class="pill review">REVIEW</span> you check these pairs one by one &nbsp;
+      <span class="pill unmatched">UNMATCHED</span> no safe partner found — surveyed ones are likely new outlets; existing ones were not re-found.
+    </p>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="card" id="resultsCard" style="display:none">
+    <div class="step-head"><span class="step-num">3</span><h2>Results</h2></div>
+    <div id="summary" style="margin-top:12px"></div>
+    <div class="row" style="margin:12px 0">
+      <button id="dlXlsx">Download Excel workbook (.xlsx)</button>
+      <span class="muted">Sheets: Summary · Crosswalk · Matched · Review · Unmatched_New · Unmatched_Existing — built for XLOOKUP in Google Sheets.</span>
+    </div>
+    <div class="row">
+      <button class="filter active" type="button" data-filter="ALL">All</button>
+      <button class="filter" type="button" data-filter="AUTO_MATCH">Auto-matched</button>
+      <button class="filter" type="button" data-filter="REVIEW">Review</button>
+      <button class="filter" type="button" data-filter="UNMATCHED">Unmatched</button>
+      <span style="flex:1"></span>
+      <span style="min-width:240px;flex:0 1 320px"><input type="search" id="searchResults" placeholder="Search ID, outlet, owner, phone…"></span>
+    </div>
+    <p class="muted" id="resultCount"></p>
+    <p class="muted">Your next job: in the workbook's <strong>Review</strong> sheet, check each pair (sorted by Score) and pick APPROVE / REJECT from the <code>Review_Decision</code> dropdown. The <strong>Crosswalk</strong> sheet (Existing_ID in A, New_Survey_ID in B) is your XLOOKUP table — the Summary sheet shows the exact formulas. The preview below shows up to 200 rows; the workbook contains everything.</p>
+    <div class="wrap"><table id="preview"></table></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>How the scoring works</summary>
+      <ul>
+        <li><strong>Phone (cleaned):</strong> <code>0803…</code>, <code>+234 803…</code> and <code>234803…</code> are treated as the same number; multiple numbers in one cell are all read.</li>
+        <li><strong>Names (fuzzy):</strong> spelling differences, word order, and filler words like Shop / Store / Ltd are ignored, so “Adebayo Stores” can match “Store Adebayo”.</li>
+        <li><strong>Distance:</strong> candidates must normally be near each other. A phone match kilometres away goes to REVIEW — one owner/agent phone often serves several outlets, so those must not auto-merge.</li>
+        <li><strong>One-to-one:</strong> if two surveyed outlets claim the same existing outlet, the higher score wins and the other is flagged as a possible duplicate survey.</li>
+        <li><strong>Score:</strong> a weighted blend of outlet-name similarity, owner-name similarity, phone match and closeness (0–100).</li>
+      </ul>
+    </details>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-brand">
+    <span class="g-logo">G</span>
+    <span>Developed by <a href="https://adewale-godspower.github.io/portfolio/" target="_blank" rel="noopener noreferrer">Gode-Technology</a> © 2026</span>
+  </div>
+  <div class="foot-sub">Outlet Matcher v1.0 · runs on your device, nothing is uploaded anywhere</div>
+</footer>
+
+<script>
+"use strict";
+// ---------- Local-only CSV helpers ----------
+function parseCSV(text){
+  const rows=[]; let i=0, field="", row=[], inQ=false;
+  text=text.replace(/^\uFEFF/,"");
+  while(i<text.length){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){field+='"'; i+=2; continue;} inQ=false; i++; continue; }
+      field+=c; i++; continue;
+    }
+    if(c==='"'){ inQ=true; i++; continue; }
+    if(c===","){ row.push(field); field=""; i++; continue; }
+    if(c==="\r"){ i++; continue; }
+    if(c==="\n"){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+    field+=c; i++;
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  const clean=rows.filter(r=>r.some(v=>String(v).trim()!==""));
+  if(!clean.length) return {headers:[],records:[]};
+  const headers=clean[0].map(h=>String(h).trim());
+  const records=clean.slice(1).map(r=>{ const o={}; headers.forEach((h,idx)=>o[h]=r[idx]??""); return o; });
+  return {headers,records};
+}
+
+// ---------- Cleaning / normalisation ----------
+const STOP=new Set(["the","shop","store","stores","supermarket","provision","provisions","mart","ltd","limited","plc","enterprise","enterprises","venture","ventures","business","biz","and","sons","son","co","company","nigeria","Nig","general","trading","retail"]);
+function normText(s){
+  return String(s||"").toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9 ]+/g," ")
+    .split(/\s+/).filter(t=>t && !STOP.has(t)).join(" ").trim();
+}
+function addPhone(out,d){
+  if(!d || d.length<7) return;
+  if(d.startsWith("234") && d.length>=12) d="0"+d.slice(3);
+  else if(d.length===10 && /^[789]/.test(d)) d="0"+d;
+  if(d.length>11) d=d.slice(d.length-11);
+  if(d.length>=7) out.add(d);
+}
+function phonesOf(s){
+  const out=new Set();
+  if(!s) return [];
+  // split multiple numbers on , ; / | or the word "and", so spaced numbers survive
+  String(s).split(/[,;\/|]+|\band\b/i).forEach(part=>{
+    const d=part.replace(/\D/g,"");
+    if(d.length>=20 && d.length%11===0){ for(let k=0;k<d.length;k+=11) addPhone(out,d.slice(k,k+11)); }
+    else addPhone(out,d);
+  });
+  return [...out];
+}
+function toNum(v){ if(v===null||v===undefined||v==="") return null; const n=parseFloat(String(v).replace(",",".")); return isFinite(n)?n:null; }
+function distanceM(aLat,aLon,bLat,bLon){
+  if([aLat,aLon,bLat,bLon].some(v=>v===null||v===undefined)) return null;
+  const R=6371000, rad=x=>x*Math.PI/180;
+  const dLat=rad(bLat-aLat), dLon=rad(bLon-aLon);
+  const h=Math.sin(dLat/2)**2 + Math.cos(rad(aLat))*Math.cos(rad(bLat))*Math.sin(dLon/2)**2;
+  return Math.round(2*R*Math.asin(Math.sqrt(h)));
+}
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const cur=[i];
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    prev=cur;
+  }
+  return prev[n];
+}
+function similarity(a,b){
+  a=normText(a); b=normText(b);
+  if(!a||!b) return null;
+  if(a===b) return 100;
+  const sort=s=>s.split(" ").sort().join(" ");
+  const x=sort(a), y=sort(b);
+  const ratio=(p,q)=>Math.round((1-lev(p,q)/Math.max(p.length,q.length))*100);
+  let best=ratio(x,y);
+  const A=new Set(a.split(" ")), B=new Set(b.split(" "));
+  const inter=[...A].filter(t=>B.has(t)).length;
+  const jacc=Math.round(100*inter/((A.size+B.size-inter)||1));
+  return Math.max(best,jacc);
+}
+
+// ---------- App state ----------
+let dataA=null, dataB=null, resultRows=[], activeFilter="ALL";
+let sourceNameA="Existing outlets file", sourceNameB="Surveyed outlets file", lastRun=null;
+const FIELDS=[
+  ["id","ID column"],["outlet","Outlet name column"],["owner","Owner name column"],
+  ["phone","Phone column"],["lat","Latitude column"],["lon","Longitude column"]
+];
+function guess(headers, keys){
+  const low=headers.map(h=>h.toLowerCase());
+  for(const k of keys){ const idx=low.findIndex(h=>h.includes(k)); if(idx>=0) return headers[idx]; }
+  return "";
+}
+function buildMapping(el, headers, prefix){
+  const guesses={
+    id:guess(headers,["id","code","ref"]),
+    outlet:guess(headers,["outlet","business","shop name","store name","name"]),
+    owner:guess(headers,["owner","proprietor","contact person","manager","person"]),
+    phone:guess(headers,["phone","mobile","whatsapp","telephone","contact"]),
+    lat:guess(headers,["latitude","lat"]),
+    lon:guess(headers,["longitude","lng","long","lon"])
+  };
+  el.innerHTML=FIELDS.map(([key,label])=>{
+    const opts=['<option value="">— none —</option>'].concat(
+      headers.map(h=>'<option '+(guesses[key]===h?"selected":"")+' value="'+h.replace(/"/g,"&quot;")+'">'+h+"</option>")).join("");
+    return '<label>'+label+'</label><select id="'+prefix+"_"+key+'">'+opts+"</select>";
+  }).join("");
+  const which = prefix==="a" ? "A" : "B";
+  el.querySelectorAll("select").forEach(sel=>sel.addEventListener("change",()=>updateStats(which)));
+  updateStats(which);
+}
+function mapping(prefix){
+  const m={}; FIELDS.forEach(([k])=>{ const el=document.getElementById(prefix+"_"+k); m[k]=el?el.value:""; });
+  return m;
+}
+function prep(records, m){
+  return records.map((r,idx)=>({
+    _idx:idx,
+    id: (m.id? r[m.id] : "") || String(idx+1),
+    outlet: m.outlet? r[m.outlet] : "",
+    owner: m.owner? r[m.owner] : "",
+    phoneRaw: m.phone? r[m.phone] : "",
+    phones: phonesOf(m.phone? r[m.phone] : ""),
+    lat: toNum(m.lat? r[m.lat] : null),
+    lon: toNum(m.lon? r[m.lon] : null)
+  }));
+}
+function updateStats(which){
+  const data = which==="A" ? dataA : dataB;
+  const box = document.getElementById("count"+which);
+  if(!data || !box) return;
+  const rows=prep(data.records, mapping(which==="A"?"a":"b"));
+  const seen=new Set(); let dup=0;
+  rows.forEach(r=>{ if(seen.has(String(r.id))) dup++; seen.add(String(r.id)); });
+  const noPhone=rows.filter(r=>!r.phones.length).length;
+  const noCoords=rows.filter(r=>r.lat===null||r.lon===null).length;
+  box.style.display="block";
+  box.textContent=rows.length+" rows  •  "+dup+" duplicate ID(s)  •  "+noPhone+" without a usable phone  •  "+noCoords+" without coordinates";
+}
+async function handleFile(file, which){
+  if(!file) return;
+  const parsed=parseCSV(await file.text());
+  if(parsed.headers.length<2 || !parsed.records.length){ alert("That file does not look like a CSV with data rows. Please check it and try again."); return; }
+  if(which==="A"){ dataA=parsed; sourceNameA=file.name; buildMapping(document.getElementById("mapA"),parsed.headers,"a"); }
+  else { dataB=parsed; sourceNameB=file.name; buildMapping(document.getElementById("mapB"),parsed.headers,"b"); }
+  document.getElementById("runBtn").disabled=!(dataA&&dataB);
+}
+document.getElementById("fileA").addEventListener("change",e=>handleFile(e.target.files[0],"A"));
+document.getElementById("fileB").addEventListener("change",e=>handleFile(e.target.files[0],"B"));
+[["dzA","A"],["dzB","B"]].forEach(([id,which])=>{
+  const dz=document.getElementById(id);
+  ["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add("dragover"); }));
+  ["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove("dragover"); }));
+  dz.addEventListener("drop",e=>handleFile(e.dataTransfer.files[0],which));
+});
+
+// ---------- Strictness presets ----------
+document.querySelectorAll("button.preset").forEach(btn=>btn.addEventListener("click",()=>{
+  document.getElementById("autoScore").value=btn.dataset.auto;
+  document.getElementById("reviewScore").value=btn.dataset.review;
+  document.getElementById("autoDist").value=btn.dataset.dist;
+}));
+
+// ---------- Matching ----------
+function scorePair(a,b){
+  const nameSim=similarity(a.outlet,b.outlet);
+  const ownerSim=similarity(a.owner,b.owner);
+  const phoneMatch=!!(a.phones.length&&b.phones.length) && a.phones.some(p=>b.phones.includes(p));
+  const hasPhone=!!(a.phones.length&&b.phones.length);
+  const dist=distanceM(a.lat,a.lon,b.lat,b.lon);
+  const distScore=dist===null?50:Math.max(0,100-dist/5);
+  const phoneScore=phoneMatch?100:(hasPhone?0:50);
+  let score;
+  if(ownerSim!==null) score=(nameSim||0)*0.45+ownerSim*0.25+phoneScore*0.20+distScore*0.10;
+  else score=(nameSim||0)*0.65+phoneScore*0.20+distScore*0.15;
+  const method=[];
+  if(phoneMatch) method.push("Phone");
+  if(nameSim!==null&&nameSim>=70) method.push("OutletName");
+  if(ownerSim!==null&&ownerSim>=70) method.push("OwnerName");
+  if(dist!==null&&dist<=100) method.push("CloseLocation");
+  return {a,b,nameSim,ownerSim,phoneMatch,dist,score:Math.round(score),method:method.join("+")||"Weak"};
+}
+function rowFor(a,b,status,s,note){
+  return {
+    Existing_ID:a?a.id:"", New_Survey_ID:b?b.id:"",
+    Existing_Outlet:a?a.outlet:"", Survey_Outlet:b?b.outlet:"",
+    Existing_Owner:a?a.owner:"", Survey_Owner:b?b.owner:"",
+    Existing_Phone:a?a.phoneRaw:"", Survey_Phone:b?b.phoneRaw:"",
+    Match_Status:status, Match_Method:s?s.method:"", Score:s?s.score:"",
+    Name_Similarity:(s&&s.nameSim!==null&&s.nameSim!==undefined)?s.nameSim:"",
+    Owner_Similarity:(s&&s.ownerSim!==null&&s.ownerSim!==undefined)?s.ownerSim:"",
+    Phone_Match:s?(s.phoneMatch?"YES":"NO"):"", Distance_m:(s&&s.dist!==null&&s.dist!==undefined)?s.dist:"",
+    Notes:note||"", Review_Decision:""
+  };
+}
+function filteredRows(){
+  const q=(document.getElementById("searchResults").value||"").toLowerCase();
+  return resultRows.filter(r=>{
+    if(activeFilter!=="ALL" && r.Match_Status!==activeFilter) return false;
+    if(q && !Object.values(r).join(" ").toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function renderPreview(){
+  if(!resultRows.length) return;
+  const list=filteredRows();
+  document.getElementById("resultCount").textContent="Showing "+Math.min(200,list.length)+" of "+list.length+" filtered rows ("+resultRows.length+" total).";
+  const heads=Object.keys(resultRows[0]);
+  document.getElementById("preview").innerHTML="<tr>"+heads.map(h=>"<th>"+h+"</th>").join("")+"</tr>"+
+    list.slice(0,200).map(r=>"<tr>"+heads.map(h=>{
+      if(h==="Match_Status") return '<td><span class="pill '+(r[h]==="AUTO_MATCH"?"auto":r[h]==="REVIEW"?"review":"unmatched")+'">'+r[h]+"</span></td>";
+      if(h==="Existing_ID"||h==="New_Survey_ID") return "<td><strong>"+(r[h]??"")+"</strong></td>";
+      return "<td>"+(r[h]??"")+"</td>";
+    }).join("")+"</tr>").join("");
+}
+document.querySelectorAll("button.filter").forEach(btn=>btn.addEventListener("click",()=>{
+  document.querySelectorAll("button.filter").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active"); activeFilter=btn.dataset.filter; renderPreview();
+}));
+document.getElementById("searchResults").addEventListener("input",renderPreview);
+
+function runMatching(){
+  const mA=mapping("a"), mB=mapping("b");
+  if(!mA.id||!mB.id){ alert("Please map the ID column for both files first (Step 1)."); return; }
+  if(!mA.outlet||!mB.outlet){ alert("Please map the Outlet name column for both files first (Step 1)."); return; }
+  if((mA.lat&&mA.lat===mA.lon)||(mB.lat&&mB.lat===mB.lon)){ alert("Latitude and Longitude are mapped to the same column — please fix that in Step 1."); return; }
+  if((!mA.lat||!mA.lon||!mB.lat||!mB.lon) && !confirm("Coordinates are not mapped for one or both files, so matching will rely on phone and names only. Continue?")) return;
+
+  const autoScore=+document.getElementById("autoScore").value||78;
+  const reviewScore=+document.getElementById("reviewScore").value||55;
+  const autoDist=+document.getElementById("autoDist").value||300;
+  const A=prep(dataA.records,mA);
+  const B=prep(dataB.records,mB);
+
+  // candidate generation: exact phone (any distance) + nearby points (spatial grid)
+  const phoneIndex=new Map();
+  A.forEach(a=>a.phones.forEach(p=>{ if(!phoneIndex.has(p)) phoneIndex.set(p,[]); phoneIndex.get(p).push(a); }));
+  const grid=new Map();
+  const cellOf=(lat,lon)=>Math.floor(lat/0.01)+":"+Math.floor(lon/0.01);
+  A.forEach(a=>{ if(a.lat!==null&&a.lon!==null){ const k=cellOf(a.lat,a.lon); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(a); } });
+
+  const bestPerB=B.map(b=>{
+    const cand=new Map();
+    b.phones.forEach(p=>(phoneIndex.get(p)||[]).forEach(a=>cand.set(a._idx,a)));
+    if(b.lat!==null&&b.lon!==null){
+      const ci=Math.floor(b.lat/0.01), cj=Math.floor(b.lon/0.01);
+      for(let x=ci-1;x<=ci+1;x++) for(let y=cj-1;y<=cj+1;y++){
+        (grid.get(x+":"+y)||[]).forEach(a=>{ const d=distanceM(a.lat,a.lon,b.lat,b.lon); if(d!==null&&d<=1000) cand.set(a._idx,a); });
+      }
+    }
+    let best=null;
+    cand.forEach(a=>{ const s=scorePair(a,b); if(!best||s.score>best.score) best=s; });
+    return best;
+  });
+
+  // one-to-one: the highest score wins a contested existing outlet
+  const claim=new Map();
+  bestPerB.forEach((s,i)=>{ if(!s) return;
+    const cur=claim.get(s.a._idx);
+    if(!cur||s.score>cur.score) claim.set(s.a._idx,{score:s.score,bIdx:i});
+  });
+
+  resultRows=[]; const usedA=new Set(); let nAuto=0,nReview=0,nUnmatchedB=0;
+  B.forEach((b,i)=>{
+    const s=bestPerB[i];
+    let status="UNMATCHED", note="";
+    if(s){
+      const contested=claim.get(s.a._idx).bIdx!==i;
+      if(contested){ status="REVIEW"; note="Possible duplicate: another surveyed outlet scored higher for this existing outlet."; }
+      else if(s.phoneMatch && s.dist!==null && s.dist>1000){ status="REVIEW"; note="Phone matches but locations are far apart — possible shared owner/agent phone."; }
+      else if(s.phoneMatch && s.dist!==null && s.dist<=50){ status="AUTO_MATCH"; note="Same phone, same location."; }
+      else if(s.score>=autoScore && (s.dist===null||s.dist<=autoDist)){ status="AUTO_MATCH"; }
+      else if(s.score>=reviewScore && (s.dist===null||s.dist<=1000)){ status="REVIEW"; note="Check this pair on the map."; }
+      else if(s.dist!==null&&s.dist<=50&&(s.nameSim||0)>=60){ status="REVIEW"; note="Very close location but names differ — check on map."; }
+    }
+    if(status==="AUTO_MATCH"){ nAuto++; usedA.add(s.a._idx); }
+    else if(status==="REVIEW"){ nReview++; usedA.add(s.a._idx); }
+    else nUnmatchedB++;
+    resultRows.push(rowFor(s?s.a:null,b,status,s,note));
+  });
+  let nUnmatchedA=0;
+  A.forEach(a=>{ if(!usedA.has(a._idx)){ nUnmatchedA++; resultRows.push(rowFor(a,null,"UNMATCHED",null,"Existing outlet not matched to any surveyed outlet.")); } });
+
+  const order={AUTO_MATCH:0,REVIEW:1,UNMATCHED:2};
+  resultRows.sort((x,y)=>order[x.Match_Status]-order[y.Match_Status]||((+y.Score||0)-(+x.Score||0)));
+  lastRun={generated:new Date().toLocaleString(), totalA:A.length, totalB:B.length,
+    nAuto:nAuto, nReview:nReview, nUnmatchedB:nUnmatchedB, nUnmatchedA:nUnmatchedA,
+    autoScore:autoScore, reviewScore:reviewScore, autoDist:autoDist};
+  document.getElementById("summary").innerHTML=
+    '<span class="stat"><b>'+nAuto+'</b>Auto-matched</span>'+
+    '<span class="stat"><b>'+nReview+'</b>Need your review</span>'+
+    '<span class="stat"><b>'+nUnmatchedB+'</b>Surveyed, no match (likely new)</span>'+
+    '<span class="stat"><b>'+nUnmatchedA+'</b>Existing, not re-found</span>';
+  activeFilter="ALL";
+  document.querySelectorAll("button.filter").forEach(b=>b.classList.toggle("active",b.dataset.filter==="ALL"));
+  document.getElementById("searchResults").value="";
+  renderPreview();
+  document.getElementById("resultsCard").style.display="block";
+  document.getElementById("resultsCard").scrollIntoView({behavior:"smooth"});
+}
+document.getElementById("runBtn").addEventListener("click",runMatching);
+document.getElementById("dlXlsx").addEventListener("click",()=>{
+  if(!resultRows.length){ alert("Run matching first."); return; }
+  const blob=makeXlsxBlob(buildWorkbookSheets());
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="outlet_match_results.xlsx"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
+
+// ---------- Excel (.xlsx) writer — native, no library, runs locally ----------
+// Column layout for the evidence sheets. IDs first for XLOOKUP, IDs/phones forced to text.
+const XLSX_COLS=[
+  ["Existing_ID",18,"text"],["New_Survey_ID",18,"text"],["Match_Status",15,"status"],["Match_Method",24,"text"],
+  ["Score",9,"num"],["Existing_Outlet",26,"text"],["Survey_Outlet",26,"text"],["Name_Similarity",14,"num"],
+  ["Existing_Owner",22,"text"],["Survey_Owner",22,"text"],["Owner_Similarity",14,"num"],
+  ["Existing_Phone",18,"text"],["Survey_Phone",18,"text"],["Phone_Match",12,"text"],["Distance_m",12,"num"],
+  ["Notes",38,"text"],["Review_Decision",16,"text"]
+];
+function evidenceSheet(name, rows, tab, withValidation){
+  return { name:name, tab:tab, freeze:true, filter:true, validation:!!withValidation,
+    headers:XLSX_COLS.map(c=>c[0]), widths:XLSX_COLS.map(c=>c[1]), kinds:XLSX_COLS.map(c=>c[2]),
+    rows:rows.map(r=>XLSX_COLS.map(c=>r[c[0]]??"")) };
+}
+function buildWorkbookSheets(){
+  const matched=resultRows.filter(r=>r.Match_Status==="AUTO_MATCH");
+  const review=resultRows.filter(r=>r.Match_Status==="REVIEW");
+  const unNew=resultRows.filter(r=>r.Match_Status==="UNMATCHED"&&r.New_Survey_ID);
+  const unExisting=resultRows.filter(r=>r.Match_Status==="UNMATCHED"&&r.Existing_ID&&!r.New_Survey_ID);
+  const m=lastRun||{generated:"",totalA:0,totalB:0,nAuto:matched.length,nReview:review.length,
+    nUnmatchedB:unNew.length,nUnmatchedA:unExisting.length,autoScore:"",reviewScore:"",autoDist:""};
+  const S={header:1,id:2,text:3,num:4,label:9,plain:10,title:8};
+  const crow=(a,b,c,sa,sb,sc,h)=>({cells:[{v:a,s:sa},{v:b,s:sb},{v:c,s:sc}],h:h||18});
+  const summary={ name:"Summary", tab:"0B6E4F", widths:[30,16,88], customRows:[
+    crow("Outlet Matcher — Results Summary","","",S.title,S.plain,S.plain,30),
+    crow("Generated","",m.generated,S.label,S.plain,S.plain),
+    crow("Existing outlets file","",sourceNameA,S.label,S.plain,S.plain),
+    crow("Surveyed outlets file","",sourceNameB,S.label,S.plain,S.plain),
+    crow("Settings used","","Trusted automatically at score ≥ "+m.autoScore+"  •  Sent to Review at score ≥ "+m.reviewScore+"  •  Trusted only within "+m.autoDist+" m",S.label,S.plain,S.plain),
+    crow("","","",S.plain,S.plain,S.plain,8),
+    crow("Category","Count","What this means",S.header,S.header,S.header,24),
+    crow("Auto-matched",m.nAuto,"Confident pairs. Spot-check a few, then use them.",S.label,S.num,S.text),
+    crow("Need your review",m.nReview,"Ambiguous pairs — decide APPROVE / REJECT in the Review sheet.",S.label,S.num,S.text),
+    crow("Surveyed, no match",m.nUnmatchedB,"Probably genuinely new outlets.",S.label,S.num,S.text),
+    crow("Existing, not re-found",m.nUnmatchedA,"Closed, moved, missed, or changed name + phone completely.",S.label,S.num,S.text),
+    crow("Total existing outlets",m.totalA,"Check: Auto-matched + Need review + Existing not re-found = this total (review pairs are claims, not yet confirmed).",S.label,S.num,S.text),
+    crow("Total surveyed outlets",m.totalB,"Check: Auto-matched + Need review + Surveyed no match = this total.",S.label,S.num,S.text),
+    crow("","","",S.plain,S.plain,S.plain,8),
+    crow("Using the Crosswalk sheet in Google Sheets","","",S.header,S.header,S.header,24),
+    crow("Step 1","","Upload this workbook to Google Drive, open it, and let it convert to Google Sheets (File → Save as Google Sheets if prompted).",S.label,S.plain,S.text,32),
+    crow("Step 2","","In your own sheet, put an existing outlet ID in a cell (say A2) and use the formula in the next row to get its surveyed ID. Change A2 to your ID cell.",S.label,S.plain,S.text,32),
+    crow("Existing ID → New ID","","=XLOOKUP(A2, Crosswalk!$A:$A, Crosswalk!$B:$B, \"Not Found\")",S.label,S.plain,S.text),
+    crow("New ID → Existing ID","","=XLOOKUP(A2, Crosswalk!$B:$B, Crosswalk!$A:$A, \"Not Found\")",S.label,S.plain,S.text),
+    crow("Note","","IDs and phone numbers are stored as text so leading zeros and long IDs survive. Keep them as text in your sheet too, or XLOOKUP will miss matches.",S.label,S.plain,S.text,32),
+    crow("","","",S.plain,S.plain,S.plain,8),
+    crow("After you finish reviewing","","",S.header,S.header,S.header,24),
+    crow("Step 1","","In the Review sheet, filter Review_Decision = APPROVE. Those pairs are confirmed matches.",S.label,S.plain,S.text),
+    crow("Step 2","","Copy columns A:B of the approved rows and paste them at the bottom of the Crosswalk sheet. Your XLOOKUPs now cover approved reviews too.",S.label,S.plain,S.text,32),
+    crow("Shortcut (Google Sheets)","","=FILTER(Review!A:B, Review!Q:Q=\"APPROVE\") lists the approved pairs on any sheet (column Q is Review_Decision).",S.label,S.plain,S.text,32)
+  ]};
+  const crosswalk={ name:"Crosswalk", tab:"0B6E4F", freeze:true, filter:true,
+    headers:["Existing_ID","New_Survey_ID"], widths:[22,22], kinds:["text","text"],
+    rows:matched.map(r=>[r.Existing_ID,r.New_Survey_ID]) };
+  return [ summary, crosswalk,
+    evidenceSheet("Matched",matched,"0B6E4F",false),
+    evidenceSheet("Review",review,"B7791F",true),
+    evidenceSheet("Unmatched_New",unNew,"9B2C2C",false),
+    evidenceSheet("Unmatched_Existing",unExisting,"9B2C2C",false) ];
+}
+function xmlEsc(s){ return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function colLetter(n){ let s=""; while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); } return s; }
+const XLSX_STYLES='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
++'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
++'<numFmts count="1"><numFmt numFmtId="164" formatCode="0"/></numFmts>'
++'<fonts count="4">'
++'<font><sz val="11"/><color rgb="FF17202A"/><name val="Calibri"/><family val="2"/></font>'
++'<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>'
++'<font><b/><sz val="11"/><color rgb="FF17202A"/><name val="Calibri"/><family val="2"/></font>'
++'<font><b/><sz val="16"/><color rgb="FF0B6E4F"/><name val="Calibri"/><family val="2"/></font>'
++'</fonts>'
++'<fills count="7">'
++'<fill><patternFill patternType="none"/></fill>'
++'<fill><patternFill patternType="gray125"/></fill>'
++'<fill><patternFill patternType="solid"><fgColor rgb="FF0B6E4F"/><bgColor indexed="64"/></patternFill></fill>'
++'<fill><patternFill patternType="solid"><fgColor rgb="FFD3F4E2"/><bgColor indexed="64"/></patternFill></fill>'
++'<fill><patternFill patternType="solid"><fgColor rgb="FFFEF3C7"/><bgColor indexed="64"/></patternFill></fill>'
++'<fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill>'
++'<fill><patternFill patternType="solid"><fgColor rgb="FFEDF2F7"/><bgColor indexed="64"/></patternFill></fill>'
++'</fills>'
++'<borders count="2">'
++'<border><left/><right/><top/><bottom/><diagonal/></border>'
++'<border><left style="thin"><color rgb="FFD9E1E8"/></left><right style="thin"><color rgb="FFD9E1E8"/></right><top style="thin"><color rgb="FFD9E1E8"/></top><bottom style="thin"><color rgb="FFD9E1E8"/></bottom><diagonal/></border>'
++'</borders>'
++'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
++'<cellXfs count="11">'
++'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
++'<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
++'<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
++'<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="0" fontId="2" fillId="5" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf>'
++'<xf numFmtId="0" fontId="2" fillId="6" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>'
++'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
++'</cellXfs>'
++'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
++'</styleSheet>';
+function sheetXml(spec, shared){
+  const ss=v=>{ shared.total++; if(!shared.map.has(v)) { shared.map.set(v,shared.list.length); shared.list.push(v); } return shared.map.get(v); };
+  const cell=(v,c,r,style)=>{
+    const ref=colLetter(c)+r;
+    if(v===""||v===null||v===undefined) return '<c r="'+ref+'" s="'+style+'"/>';
+    if(typeof v==="number" && isFinite(v)) return '<c r="'+ref+'" s="'+style+'"><v>'+v+'</v></c>';
+    return '<c r="'+ref+'" s="'+style+'" t="s"><v>'+ss(String(v))+'</v></c>';
+  };
+  let rowsXml="", maxRow=1, maxCol=spec.widths?spec.widths.length:3;
+  if(spec.customRows){
+    spec.customRows.forEach((row,i)=>{
+      const r=i+1; maxRow=r;
+      rowsXml+='<row r="'+r+'" ht="'+(row.h||18)+'" customHeight="1">'
+        +row.cells.map((cl,c)=>cell(cl.v,c+1,r,cl.s)).join("")+'</row>';
+    });
+  } else {
+    rowsXml+='<row r="1" ht="24" customHeight="1">'
+      +spec.headers.map((h,c)=>cell(h,c+1,1,1)).join("")+'</row>';
+    spec.rows.forEach((row,i)=>{
+      const r=i+2; maxRow=r;
+      rowsXml+='<row r="'+r+'" ht="18" customHeight="1">'+row.map((v,c)=>{
+        const kind=spec.kinds?spec.kinds[c]:"text", head=spec.headers[c];
+        let style=3;
+        if(head==="Match_Status") style=(v==="AUTO_MATCH"?5:(v==="REVIEW"?6:7));
+        else if(head==="Existing_ID"||head==="New_Survey_ID") style=2;
+        else if(kind==="num" && v!=="" && isFinite(Number(v))) { return cell(Number(v),c+1,r,4); }
+        return cell(v,c+1,r,style);
+      }).join("")+'</row>';
+    });
+  }
+  const cols=(spec.widths||[]).map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join("");
+  const dim="A1:"+colLetter(maxCol)+maxRow;
+  let xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    +(spec.tab?'<sheetPr><tabColor rgb="FF'+spec.tab+'"/></sheetPr>':"")
+    +'<dimension ref="'+dim+'"/>'
+    +'<sheetViews><sheetView workbookViewId="0">'
+    +(spec.freeze?'<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/>':"")
+    +'</sheetView></sheetViews>'
+    +'<sheetFormatPr defaultRowHeight="15"/>'
+    +(cols?'<cols>'+cols+'</cols>':"")
+    +'<sheetData>'+rowsXml+'</sheetData>';
+  if(spec.filter && !spec.customRows) xml+='<autoFilter ref="A1:'+colLetter(maxCol)+maxRow+'"/>';
+  if(spec.validation && spec.rows.length){
+    xml+='<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="0" sqref="Q2:Q'+(spec.rows.length+1)+'">'
+      +'<formula1>"APPROVE,REJECT"</formula1></dataValidation></dataValidations>';
+  }
+  return xml+'</worksheet>';
+}
+const CRC_TABLE=(()=>{ const t=[]; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(bytes){ let c=0xFFFFFFFF; for(let i=0;i<bytes.length;i++) c=CRC_TABLE[(c^bytes[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){
+  const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
+  const u16=v=>{ const b=new Uint8Array(2); new DataView(b.buffer).setUint16(0,v,true); return b; };
+  const u32=v=>{ const b=new Uint8Array(4); new DataView(b.buffer).setUint32(0,v>>>0,true); return b; };
+  const now=new Date();
+  const dosTime=((now.getHours()<<11)|(now.getMinutes()<<5)|Math.floor(now.getSeconds()/2))&0xFFFF;
+  const dosDate=(((Math.max(1980,now.getFullYear())-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  files.forEach(f=>{
+    const name=enc.encode(f.name), data=enc.encode(f.content), crc=crc32(data);
+    const local=[u32(0x04034b50),u16(20),u16(0x0800),u16(0),u16(dosTime),u16(dosDate),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0)];
+    parts.push(...local,name,data);
+    central.push([u32(0x02014b50),u16(20),u16(20),u16(0x0800),u16(0),u16(dosTime),u16(dosDate),u32(crc),u32(data.length),u32(data.length),u16(name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset),name]);
+    offset+=local.reduce((n,b)=>n+b.length,0)+name.length+data.length;
+  });
+  let cdSize=0; central.forEach(c=>{ parts.push(...c); cdSize+=c.reduce((n,b)=>n+b.length,0); });
+  parts.push(u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cdSize),u32(offset),u16(0));
+  return new Blob(parts,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function makeXlsxBlob(sheets){
+  const shared={map:new Map(),list:[],total:0};
+  const sheetXmls=sheets.map(s=>sheetXml(s,shared));
+  const sharedXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="'+shared.total+'" uniqueCount="'+shared.list.length+'">'
+    +shared.list.map(t=>'<si><t xml:space="preserve">'+xmlEsc(t)+'</t></si>').join("")+'</sst>';
+  const workbookXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+    +sheets.map((s,i)=>'<sheet name="'+xmlEsc(s.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+'</sheets></workbook>';
+  const wbRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")
+    +'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    +'<Relationship Id="rId'+(sheets.length+2)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>'
+    +'</Relationships>';
+  const contentTypes='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    +'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    +'<Default Extension="xml" ContentType="application/xml"/>'
+    +'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    +sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")
+    +'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    +'<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>'
+    +'</Types>';
+  const rootRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    +'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    +'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+  const files=[{name:"[Content_Types].xml",content:contentTypes},{name:"_rels/.rels",content:rootRels},
+    {name:"xl/workbook.xml",content:workbookXml},{name:"xl/_rels/workbook.xml.rels",content:wbRels},
+    {name:"xl/styles.xml",content:XLSX_STYLES},{name:"xl/sharedStrings.xml",content:sharedXml}];
+  sheetXmls.forEach((x,i)=>files.push({name:"xl/worksheets/sheet"+(i+1)+".xml",content:x}));
+  return zipStore(files);
+}
+</script>
+</body>
+</html>
